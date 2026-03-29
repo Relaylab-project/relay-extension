@@ -1,0 +1,28 @@
+{
+  "manifest_version": 3,
+  "name": "Relay Pro",
+  "version": "1.0.0",
+  "description": "Cross-device AI context sync via ILYJ Protocol.",
+  "permissions": ["storage", "activeTab", "scripting"],
+  "host_permissions": [
+    "https://claude.ai/*",
+    "https://chatgpt.com/*",
+    "https://gemini.google.com/*",
+    "https://www.perplexity.ai/*",
+    "https://firestore.googleapis.com/*"
+  ],
+  "content_scripts": [{
+    "matches": [
+      "https://claude.ai/*",
+      "https://chatgpt.com/*",
+      "https://gemini.google.com/*",
+      "https://www.perplexity.ai/*"
+    ],
+    "js": ["content.js"],
+    "run_at": "document_idle"
+  }],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Relay Pro"
+  }
+}
