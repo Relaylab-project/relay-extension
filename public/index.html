@@ -1,3 +1,5 @@
+Here’s the complete code — copy everything below:
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -8,6 +10,27 @@
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
         body { font-family: 'Inter', sans-serif; }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        .spinner {
+            display: inline-block;
+            width: 14px;
+            height: 14px;
+            border: 2px solid rgba(255,255,255,0.3);
+            border-top-color: white;
+            border-radius: 50%;
+            animation: spin 0.7s linear infinite;
+        }
+        .spinner-dark {
+            border-color: rgba(100,116,139,0.3);
+            border-top-color: #475569;
+        }
+        .btn-disabled {
+            opacity: 0.6;
+            pointer-events: none;
+        }
     </style>
 </head>
 <body class="bg-[#f8fafc] min-h-screen flex flex-col items-center p-4">
@@ -26,44 +49,151 @@
         <div class="p-6">
             <div class="flex items-center justify-between mb-4">
                 <span class="text-xs font-medium text-slate-500">Cloud Context Buffer</span>
-                <span class="flex items-center text-[10px] bg-emerald-100 text-emerald-700 px-2 py-1 rounded-full font-bold">
-                    <span class="h-1.5 w-1.5 bg-emerald-500 rounded-full mr-1.5 animate-pulse"></span> SYNCED
+                <span id="statusBadge" class="flex items-center text-[10px] bg-emerald-100 text-emerald-700 px-2 py-1 rounded-full font-bold">
+                    <span id="statusDot" class="h-1.5 w-1.5 bg-emerald-500 rounded-full mr-1.5 animate-pulse"></span>
+                    <span id="statusText">READY</span>
                 </span>
             </div>
-            
-            <textarea id="contextBox" 
-                class="w-full h-56 p-4 bg-slate-50 border border-slate-200 rounded-2xl text-sm text-slate-700 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all resize-none" 
+
+            <textarea id="contextBox"
+                class="w-full h-56 p-4 bg-slate-50 border border-slate-200 rounded-2xl text-sm text-slate-700 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all resize-none"
                 placeholder="Paste context here or pull from AI session..."></textarea>
-            
-            <div class="grid grid-cols-2 gap-3 mt-4">
-                <button onclick="push()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 rounded-2xl shadow-lg shadow-blue-100 active:scale-95 transition-all">
+
+            <p id="lastSynced" class="text-[10px] text-slate-400 mt-2 text-right h-4"></p>
+
+            <div class="grid grid-cols-2 gap-3 mt-2">
+                <button id="pushBtn" onclick="push()"
+                    class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 rounded-2xl shadow-lg shadow-blue-100 active:scale-95 transition-all flex items-center justify-center gap-2">
                     Push to Cloud
                 </button>
-                <button onclick="pull()" class="bg-white border-2 border-slate-200 text-slate-700 font-bold py-4 rounded-2xl hover:bg-slate-50 active:scale-95 transition-all">
+                <button id="pullBtn" onclick="pull()"
+                    class="bg-white border-2 border-slate-200 text-slate-700 font-bold py-4 rounded-2xl hover:bg-slate-50 active:scale-95 transition-all flex items-center justify-center gap-2">
                     Pull Latest
                 </button>
             </div>
         </div>
-        
+
         <div class="bg-slate-50 border-t border-slate-100 p-4 flex justify-between items-center">
             <div class="text-xs text-slate-500">Account: <span class="text-slate-900 font-semibold underline cursor-pointer">Upgrade to Pro</span></div>
             <div class="text-[10px] text-slate-400 font-mono">ID: RELAY-4402</div>
         </div>
     </main>
 
+    <div id="toast"
+        class="fixed bottom-6 left-1/2 -translate-x-1/2 bg-slate-900 text-white text-sm px-5 py-3 rounded-2xl shadow-xl opacity-0 transition-opacity duration-300 pointer-events-none">
+        <span id="toastMsg"></span>
+    </div>
+
     <footer class="mt-12 text-center">
         <p class="text-slate-400 text-xs">A gayboi-lab Production</p>
     </footer>
 
-    <script>
-        function push() {
-            const text = document.getElementById('contextBox').value;
-            if(!text) return alert("Context box is empty!");
-            alert("Context pushed via ILYJ Protocol.");
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+        import { getFirestore, doc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+        const firebaseConfig = {
+            apiKey:            "AIzaSyAL3Vidfoq9X63nyOV7ACBnPR6M2yfvxGU",
+            authDomain:        "relay-project-ilyj.firebaseapp.com",
+            projectId:         "relay-project-ilyj",
+            storageBucket:     "relay-project-ilyj.firebasestorage.app",
+            messagingSenderId: "977563980870",
+            appId:             "1:977563980870:web:b814b43ec46fbe6112a647"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db  = getFirestore(app);
+        const RELAY_DOC = doc(db, "relay", "context");
+
+        function setStatus(state) {
+            const badge  = document.getElementById("statusBadge");
+            const dot    = document.getElementById("statusDot");
+            const label  = document.getElementById("statusText");
+            const states = {
+                ready:   { bg: "bg-emerald-100", text: "text-emerald-700", dot: "bg-emerald-500", label: "READY",   pulse: true  },
+                syncing: { bg: "bg-blue-100",    text: "text-blue-700",    dot: "bg-blue-500",    label: "SYNCING", pulse: true  },
+                synced:  { bg: "bg-emerald-100", text: "text-emerald-700", dot: "bg-emerald-500", label: "SYNCED",  pulse: false },
+                error:   { bg: "bg-red-100",     text: "text-red-700",     dot: "bg-red-500",     label: "ERROR",   pulse: false },
+            };
+            const s = states[state] || states.ready;
+            badge.className = `flex items-center text-[10px] ${s.bg} ${s.text} px-2 py-1 rounded-full font-bold`;
+            dot.className   = `h-1.5 w-1.5 ${s.dot} rounded-full mr-1.5${s.pulse ? " animate-pulse" : ""}`;
+            label.textContent = s.label;
         }
-        function pull() {
-            alert("Fetching latest context from Relay Cloud...");
+
+        function setButtonLoading(btnId, loading, originalLabel) {
+            const btn = document.getElementById(btnId);
+            if (loading) {
+                btn.classList.add("btn-disabled");
+                const spinnerClass = btnId === "pushBtn" ? "spinner" : "spinner spinner-dark";
+                btn.innerHTML = `<span class="${spinnerClass}"></span> ${originalLabel}`;
+            } else {
+                btn.classList.remove("btn-disabled");
+                btn.innerHTML = originalLabel;
+            }
         }
+
+        function showToast(message, isError = false) {
+            const toast = document.getElementById("toast");
+            const msg   = document.getElementById("toastMsg");
+            msg.textContent = message;
+            toast.className = `fixed bottom-6 left-1/2 -translate-x-1/2 text-sm px-5 py-3 rounded-2xl shadow-xl transition-opacity duration-300 pointer-events-none ${
+                isError ? "bg-red-600" : "bg-slate-900"
+            } text-white opacity-100`;
+            setTimeout(() => { toast.classList.replace("opacity-100", "opacity-0"); }, 2800);
+        }
+
+        function setLastSynced() {
+            const el = document.getElementById("lastSynced");
+            const now = new Date();
+            el.textContent = `Last synced: ${now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
+        }
+
+        window.push = async function () {
+            const text = document.getElementById("contextBox").value;
+            if (!text.trim()) { showToast("Context box is empty!", true); return; }
+            setStatus("syncing");
+            setButtonLoading("pushBtn", true, "Push to Cloud");
+            try {
+                await setDoc(RELAY_DOC, { text, updatedAt: new Date().toISOString() });
+                setStatus("synced");
+                setLastSynced();
+                showToast("✓ Context pushed to cloud");
+            } catch (err) {
+                console.error(err);
+                setStatus("error");
+                showToast("Push failed. Check console.", true);
+            } finally {
+                setButtonLoading("pushBtn", false, "Push to Cloud");
+            }
+        };
+
+        window.pull = async function () {
+            setStatus("syncing");
+            setButtonLoading("pullBtn", true, "Pull Latest");
+            try {
+                const snap = await getDoc(RELAY_DOC);
+                if (snap.exists()) {
+                    document.getElementById("contextBox").value = snap.data().text;
+                    setStatus("synced");
+                    setLastSynced();
+                    showToast("✓ Context pulled from cloud");
+                } else {
+                    setStatus("ready");
+                    showToast("No context saved yet.", true);
+                }
+            } catch (err) {
+                console.error(err);
+                setStatus("error");
+                showToast("Pull failed. Check console.", true);
+            } finally {
+                setButtonLoading("pullBtn", false, "Pull Latest");
+            }
+        };
     </script>
+
 </body>
 </html>
+
+
+Copy all of that, paste it into public/index.html in your repo, commit, and push.​​​​​​​​​​​​​​​​
